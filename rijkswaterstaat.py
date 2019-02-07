@@ -72,7 +72,7 @@ def get_download_parameters(group_name):
     return parameters
 
 
-def get_stations(map_type, **kwargs):
+def get_stations(map_type):
     """
     Get rijkwaterstaat stations
     """
@@ -92,137 +92,158 @@ def get_stations(map_type, **kwargs):
             'coordinates': station['geometry']['coordinates'],
             'crs': station['crs']['properties']['name'].lower(),
         })
-        crs_of_stations.append(stations[-1]['crs'])
 
-    # get coordinate system of stations
-    crs = kwargs.get('crs', 'epsg:25831')
-    crs_to_change = {*crs_of_stations} - {crs}
-    if crs_to_change:
-        for old_crs in crs_to_change:
-            proj = Projection(crs, old_crs)
-            for station in stations:
-                if station['crs'] == old_crs:
-                    station.update({
-                        'crs': crs,
-                        'coordinates': list(proj.backwards(*station['coordinates']))
-                    })
     return stations
 
 
 class Waterinfo(object):
 
-    def __init__(self, map_name, **kwargs):
+    api = "http://waterinfo.rws.nl/api/Download/CSV?"
+
+    def __init__(self, map_name):
         map_info = get_map_info(map_name)
         if not map_info:
             raise ValueError(f'{map_name} does not exist')
 
         self.map_name = map_info['name']
         self.group = map_info['group']
-        self.stations = get_stations(map_info['name'], **kwargs)
-        self.expert_parameters = get_download_parameters(self.group)
+        self.stations = get_stations(map_info['name'])
+        self.parameters = get_download_parameters(self.group)
+
+    @property
+    def parameter_slugs(self):
+        return [parameter['slug'] for parameter in self.parameters]
+
+    @property
+    def parameter_names(self):
+        return [parameter['label'] for parameter in self.parameters]
+
+    def update_station_crs(self, crs='epsg:25831'):
+        crs_of_stations = [stn['crs'] for station in station]
+        crs_to_change = {*crs_of_stations} - {crs}
+        for old_crs in crs_to_change:
+            proj = Projection(crs, old_crs)
+            for index, station in enumerate(self.stations):
+                if station['crs'] == old_crs:
+                    station.update({
+                        'crs': crs,
+                        'coordinates': list(proj.backwards(*station['coordinates']))
+                    })
 
     def get_station(self, station_name):
         """
         Get rijkswaterstaat station information based on station name
         """
 
-        # create empty station
-        station = {
-            'name': station_name,
-            'locationCode': None,
-            'coordinates': None,
-            'crs': None
-        }
-
+        station_info = {}
         for stn in self.stations:
-            if stn['name'].lower() == station_name.lower():
-                station.update(**stn)
-                continue
-        return station
+            station_names = [stn['name'].lower(), stn['locationCode'].lower()]
+            if station_name.lower() in station_names:
+                station_info.update(**stn)
+                break
+        return station_info
 
-    def get_data(self, station, start_date, end_date, **kwargs):
+    def get_data_from_horizon(self, station, start_date, end_date, **kwargs):
         """
         Get rijkswaterstaat tidal data for a given station between to
         dates
         """
 
-        # check if full station name provided or slug- if full name get slug
-        if station.endswith(')'):
-            station_slug = station
-        else:
-            station_slug = self.get_station(station)['locationCode']
-
         # get expert parameter to query
-        expert_parameter = kwargs.get('expert_parameter',
-                                      self.expert_parameters[0]['slug'])
-        if 'expert_parameter' in kwargs:
-            if not [parameter for parameter in self.expert_parameters
-                        if parameter['slug'] == expert_parameter]:
-                raise ValueError("Expert paramter doen't exist")
+        expert_parameter = kwargs.get('expert_parameter', self.parameter_slugs[0])
+        if not expert_parameter in self.parameter_slugs:
+            raise ValueError("Expert parameter doen't exist")
+
+        # check if full station name provided or slug- if full name get slug
+        station = self.get_station(station)
+        if not station:
+            raise ValueError('Station does not exist')
+
+        #parse input times
+        start_offset = (utc.localize(start_date) -
+                            utc.localize(datetime.now())).total_seconds()
+        end_offset = (utc.localize(end_date) -
+                            utc.localize(datetime.now())).total_seconds()
 
         parameters = {
-                'expertParameter': expert_parameter,
-                'locationSlug': station_slug
+            'expertParameter': expert_parameter,
+            'locationSlug': station['locationCode'],
+            'timehorizon': f"{start_offset/3600:.0f},{end_offset/3600:.0f}"
+        }
+        response = requests.get(self.api, params=parameters)
+        csv = response.text
+        return csv
+
+
+class Waterhoogten(Waterinfo):
+
+    def __init__(self):
+        super().__init__('waterhoogte-t-o-v-nap', **kwargs)
+
+    def get_data_between_dates(self, station, start_date, end_date, **kwargs):
+
+        # get expert parameter to query
+        expert_parameter = kwargs.get('expert_parameter', self.parameter_slugs[0])
+        if not expert_parameter in self.parameter_slugs:
+            raise ValueError("Expert parameter doen't exist")
+
+        # check if full station name provided or slug- if full name get slug
+        station = self.get_station(station)
+        if not station:
+            raise ValueError('Station does not exist')
+
+        tidal_reference = 'NAP'
+        if 'to_nvt' in kwargs:
+            tidal_reference = 'NVT'
+
+        date_format = '%Y-%m-%dT%H:%M:%S.001Z'
+        parameters = {
+            'expertParameter': expert_parameter,
+            'locationSlug': station['locationCode'],
+            'startdate': utc.localize(start_date).strftime(date_format),
+            'enddate': utc.localize(end_date).strftime(date_format),
+            'timezone': 'UTC',
+            'getijreference': tidal_reference
         }
 
-        if self.group is not 'Waterhoogten':
-            start_offset = (utc.localize(start_date) -
-                               utc.localize(datetime.now())).total_seconds()
-            end_offset = (utc.localize(end_date) -
-                               utc.localize(datetime.now())).total_seconds()
+        response = requests.get(self.api, params=parameters)
+        csv = response.text
 
-            parameters.update({
-                'timehorizon': f"{start_offset/3600:.0f},{end_offset/3600:.0f}"
-            })
-        else:
-            tidal_reference = 'NAP'
-            if 'to_nvt' in kwargs:
-                tidal_reference = 'NVT'
+        if 'parse' in kwargs and kwargs.get('parse') is True:
+            return self.parse(csv)
+        return csv
 
-            date_format = '%Y-%m-%dT%H:%M:%S.001Z'
-            parameters.update({
-                 'startdate': utc.localize(start_date).strftime(date_format),
-                 'enddate': utc.localize(end_date).strftime(date_format),
-                 'timezone': 'UTC',
-                 'getijreference': tidal_reference
-            })
+    @staticmethod
+    def parse_csv(csv):
 
-        # query api and get data
-        url = "http://waterinfo.rws.nl/api/Download/CSV?"
-        response = requests.get(url, params=parameters)
+        # process the the response and store in dataframe
+        lines = csv.splitlines()
+        timestamps, tidal_level = [], []
+        for line in lines[6:]:
+            columns = line.split(';')[:-1]
 
-        return response.text
+            # Extract date
+            timestamps.append(
+                datetime.strptime(' '.join(columns[:2]), '%d/%m/%Y %H:%M:%S')
+            )
 
+            # extract tidal level
+            tidal_level.append(float(columns[-1]))
 
-def parse_tidal_csv(csv_text):
-
-    # process the the response and store in dataframe
-    lines = csv_text.splitlines()
-    timestamps, tidal_level = [], []
-    for line in lines[6:]:
-        columns = line.split(';')[:-1]
-
-        # Extract date
-        timestamps.append(
-            datetime.strptime(' '.join(columns[:2]), '%d/%m/%Y %H:%M:%S')
-        )
-
-        # extract tidal level
-        tidal_level.append(float(columns[-1]))
-
-    df_tidal = pd.DataFrame(tidal_level, index=timestamps, columns=['tidal_level'])
-    df_tidal.index = df_tidal.index.map(lambda ts: utc.localize(ts))
-
-    return df_tidal
+        df_tidal = pd.DataFrame(tidal_level, index=timestamps, columns=['tidal_level'])
+        df_tidal.index = df_tidal.index.map(lambda ts: utc.localize(ts))
+        return df_tidal
 
 
-if __name__ == "__main__":
-    map_name = 'waterhoogte-t-o-v-nap'
-    waterinfo = Waterinfo(map_name)
+# if __name__ == "__main__":
 
-    print(waterinfo.stations)
 
-    station = waterinfo.stations[0]
-    print(waterinfo.get_data(station['name'],
-                             start_date=datetime(2019, 1, 1),
-                             end_date = datetime(2019, 1, 3)))
+    # map_name = 'waterhoogte-t-o-v-nap'
+    # waterinfo = Waterinfo(map_name)
+    #
+    # print(waterinfo.stations)
+    #
+    # station = waterinfo.stations[0]
+    # print(waterinfo.get_data(station['name'],
+    #                          start_date=datetime(2019, 1, 1),
+    #                          end_date = datetime(2019, 1, 3)))
