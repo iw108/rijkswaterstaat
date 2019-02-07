@@ -175,10 +175,10 @@ class Waterinfo(object):
         return csv
 
 
-class Waterhoogten(Waterinfo):
+class Waterhoogte(Waterinfo):
 
     def __init__(self):
-        super().__init__('waterhoogte-t-o-v-nap', **kwargs)
+        super().__init__('waterhoogte-t-o-v-nap')
 
     def get_data_between_dates(self, station, start_date, end_date, **kwargs):
 
@@ -210,7 +210,7 @@ class Waterhoogten(Waterinfo):
         csv = response.text
 
         if 'parse' in kwargs and kwargs.get('parse') is True:
-            return self.parse(csv)
+            return self.parse_csv(csv)
         return csv
 
     @staticmethod
@@ -235,15 +235,13 @@ class Waterhoogten(Waterinfo):
         return df_tidal
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
+    waterhoogte = Waterhoogte()
+    station = waterhoogte.stations[0]
 
-    # map_name = 'waterhoogte-t-o-v-nap'
-    # waterinfo = Waterinfo(map_name)
-    #
-    # print(waterinfo.stations)
-    #
-    # station = waterinfo.stations[0]
-    # print(waterinfo.get_data(station['name'],
-    #                          start_date=datetime(2019, 1, 1),
-    #                          end_date = datetime(2019, 1, 3)))
+    data_between_dates = waterhoogte.get_data_between_dates(
+        station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3), parse=True)
+
+    data_from_horizon = waterhoogte.get_data_from_horizon(
+        station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3))
