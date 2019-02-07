@@ -7,7 +7,7 @@ Created on Sat Jan 19 12:35:46 2019
 """
 
 from flask import Flask, render_template, jsonify
-from rijkswaterstaat import get_stations
+from rijkswaterstaat import Waterinfo
 
 app = Flask(__name__)
 app.config['GOOGLE_API_KEY'] = '<YOUR-GOOGLE-API-KEY>'
@@ -20,7 +20,9 @@ def maps(measurement):
 @app.route('/api/stations/<measurement>/')
 def api(measurement):
     try:
-        stations = get_stations(measurement, crs='epsg:4326')
+        waterinfo = Waterinfo(measurement)
+        waterinfo.update_station_crs('epsg:4326')
+        stations = waterinfo.stations
     except ValueError:
         stations = []
     return jsonify(stations)

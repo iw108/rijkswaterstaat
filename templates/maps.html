@@ -29,7 +29,7 @@
         });
 
         var infowindow = new google.maps.InfoWindow();
-            
+
         $.ajax({
           url: "{{ url_for('api', measurement=measurement) }}",
           type: 'GET',
@@ -38,12 +38,13 @@
 
           for (var i = 0; i < json.length; i++) {
             var station = json[i];
+            console.log(station)
 
             var contentString = '<div class="info_content">'+
              '<h3>'+
              station['name']+
-             '</h1>'+ 
-             '</div>';      
+             '</h1>'+
+             '</div>';
 
             var marker = new google.maps.Marker({
               position: {lat: station['coordinates'][1], lng: station['coordinates'][0]},

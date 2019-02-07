@@ -119,8 +119,7 @@ class Waterinfo(object):
         return [parameter['label'] for parameter in self.parameters]
 
     def update_station_crs(self, crs='epsg:25831'):
-        crs_of_stations = [stn['crs'] for station in station]
-        crs_to_change = {*crs_of_stations} - {crs}
+        crs_to_change = {stn['crs'] for stn in self.stations} - {crs}
         for old_crs in crs_to_change:
             proj = Projection(crs, old_crs)
             for index, station in enumerate(self.stations):
@@ -246,4 +245,5 @@ if __name__ == "__main__":
     data_from_horizon = waterhoogte.get_data_from_horizon(
         station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3))
 
-    print(data_from_horizon)
+    waterhoogte.update_station_crs('epsg:4326')
+    print(waterhoogte.stations)
