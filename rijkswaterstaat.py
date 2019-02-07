@@ -26,9 +26,9 @@ RWS_MAPS = [
 
 def get_map_info(map_name):
     map_info = {}
-    rws_map = [rws_map for rws_map in RWS_MAPS if rws_map['name'] == map_name]
-    if rws_map:
-        map_info = rws_map[0]
+    for rws_map in RWS_MAPS:
+        if rws_map['name'] == map_name:
+            map_info.update(rws_map)
     return map_info
 
 
@@ -245,3 +245,5 @@ if __name__ == "__main__":
 
     data_from_horizon = waterhoogte.get_data_from_horizon(
         station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3))
+
+    print(data_from_horizon)
