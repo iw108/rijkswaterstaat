@@ -1,9 +1,14 @@
 
-import requests
+
 from bs4 import BeautifulSoup
-import re
-import os
+from calendar import timegm
+from datetime import datetime
 import netCDF4
+import os
+import pandas as pd
+from pytz import utc, timezone
+import re
+import requests
 
 
 CATALOG_URL = ('http://opendap.deltares.nl/thredds/'
@@ -45,75 +50,75 @@ class Measurement(object):
 
     def __init__(self, measurement):
 
-        measurement_id = get_measurement_id(measurement)
-        if not measurement_id:
+        self.measurement = measurement
+        self.measurement_id = get_measurement_id(measurement)
+        if not self.measurement_id:
             raise ValueError("Measurement doesn't exist.")
 
-        self.measurement = measurement
-        self.full_name = '_'.join((measurement_id, measurement))
-        self.catalog_url = os.path.join(CATALOG_URL, self.full_name,
+        full_name = '_'.join((self.measurement_id, self.measurement))
+        self.data_url = os.path.join(DATA_URL, full_name, 'nc')
+        self.catalog_url = os.path.join(CATALOG_URL, full_name,
                                         'nc', 'catalog.html')
 
     @property
-    def files(self):
-        files = [os.path.join(DATA_URL, self.full_name, 'nc', file)
+    def file_list(self):
+        files = [os.path.join(self.data_url, file)
                      for file in get_files(self.catalog_url)]
         return files
 
-    def get_station_codes(self):
-        pattern = 'id\d+-(.*).nc$'
-        return [re.findall(pattern, file)[0] for file in self.files]
-
-    def get_station_file(self, station_name):
+    def get_file(self, station_name):
         file_out = None
         station_name = station_name.lower()
-        for code, file in zip(self.get_station_codes(), self.files):
-            if all([letter in station_name for letter in code.lower()]):
+        for file in self.file_list:
+            station_code = re.findall('id\d+-(.*).nc$', file)[0]
+            if all([letter in station_name for letter in station_code.lower()]):
                 with netCDF4.Dataset(file, 'r') as ds:
                     if ds.stationname.lower() == station_name.lower():
-                        file_out = file
+                        file_out = File(file)
         return file_out
 
     def get_all_available_stations(self):
-        stations = []
-        for file in self.files:
-            with netCDF4.Dataset(file_path, 'r') as ds:
-                stations.append({
-                    'station_name': ds.stationname,
-                    'location_code': ds.locationcode,
-                    'coordinates': [ds.geospatial_lat_min, ds.geospatial_lon_min],
-                    'crs': 'epsg:4326'
-                })
-        return stations
+        return [File(file).meta for file in self.files]
 
 
 class File:
 
     def __init__(self, filepath):
-        self.filepath = self.filepath
+        self.filepath = filepath
 
-    def get_file_meta(self):
+    @property
+    def meta(self):
         with self.open() as ds:
-            station = {
+            station_meta = {
                 'station_name': ds.stationname,
                 'location_code': ds.locationcode,
                 'coordinates': [ds.geospatial_lat_min, ds.geospatial_lon_min],
                 'crs': 'epsg:4326'
             }
-        return station
+        return station_meta
 
     def get_data(self, start_date, end_date):
+        expected_tz = timezone('MET')
+        start, end = map(lambda t: timegm(expected_tz.localize(t).timetuple()),
+                         [start_date, end_date])
         with self.open() as ds:
-            t = ds.variables['time']
-        return t
+            timestamps = (ds.variables['time'][:] * 24 * 60).round() * 60
+            variable_name = list(ds.variables.keys())[-1]
+            variables = ds.variables[variable_name][:].flatten()
+
+        mask = (timestamps >= start) & (timestamps <= end)
+        df = pd.DataFrame(variables[mask], index=timestamps[mask],
+                          columns=[variable_name])
+        df.index = df.index.map(lambda t: expected_tz.localize(datetime.utcfromtimestamp(t)))
+        return df
 
     def open(self):
-        return netCDF4.Dataset(self.file_path, 'r')
+        return netCDF4.Dataset(self.filepath, 'r')
 
 
 if __name__ == "__main__":
-    print(MEASUREMENTS)
-    measurement = 'Totaal_fosfaat_in_mg_l_na_filtratie_in_oppervlaktewater'
-    x = Measurement(measurement)
-    print(x.get_station_codes())
-    print(x.files)
+    measurement = 'Waterhoogte_in_cm_t.o.v._normaal_amsterdams_peil_in_oppervlaktewater'
+    waterhoogte = Measurement(measurement)
+    file = waterhoogte.get_file('scheveningen')
+    print(file.meta)
+    print(file.get_data(datetime(2014, 1, 1), datetime(2014, 1, 2)))
