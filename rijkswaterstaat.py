@@ -6,70 +6,23 @@ Created on Wed Jan 23 19:50:47 2019
 @author: isaacwilliams
 """
 
-import requests
-import pyproj
-from pytz import utc
+
 from datetime import datetime
 import pandas as pd
+import pyproj
+from pytz import utc
+import requests
 
 
-RWS_MAPS = [
-  {'name': 'waterhoogte-t-o-v-nap', 'group': 'Waterhoogten'},
-  {'name': 'astronomische-getij', 'group': 'Waterhoogten'},
-  {'name': 'waterafvoer', 'group': 'Afvoer'},
-  {'name': 'wind', 'group': 'Wind'},
-  {'name': 'watertemperatuur', 'group': 'Watertemperatuur'},
-  {'name': 'stroming', 'group': 'Stroming'},
-  {'name': 'golfhoogte', 'group': 'Golven'},
+RWS_PUBLIC_MAPS = [
+  'waterhoogte-t-o-v-nap',
+  'astronomische-getij',
+  'waterafvoer',
+  'wind',
+  'watertemperatuur',
+  'stroming',
+  'golfhoogte',
 ]
-
-
-def get_map_info(map_name):
-    map_info = {}
-    for rws_map in RWS_MAPS:
-        if rws_map['name'] == map_name:
-            map_info.update(rws_map)
-    return map_info
-
-
-class Projection(object):
-    """
-    class to transform between two coordinate systems
-    """
-
-    def __init__(self, first_projection, second_projection):
-        self.first_projection = pyproj.Proj(init=first_projection)
-        self.second_projection = pyproj.Proj(init=second_projection)
-
-    def forwards(self, lon, lat):
-        """
-        transform longitude and latitude from first to second coord system
-        """
-        return pyproj.transform(self.second_projection, self.first_projection, lon, lat)
-
-    def backwards(self, lon, lat):
-        """
-        transform longitude and latitude from second to first coord system
-        """
-        return pyproj.transform(self.second_projection, self.first_projection, lon, lat)
-
-
-def get_download_parameters(group_name):
-
-    url = 'https://waterinfo.rws.nl/api/nav/downloadgroups'
-    download_groups = requests.get(url).json()
-
-    parameters = {}
-    for group in download_groups:
-        if group['label'].lower() == group_name.lower():
-            parameters = group['parameters']
-            continue
-
-    if parameters:
-        for parameter in parameters:
-            parameter.pop('synonyms')
-
-    return parameters
 
 
 def get_stations(map_type):
@@ -77,7 +30,7 @@ def get_stations(map_type):
     Get rijkwaterstaat stations
     """
 
-    if map_type not in [rws_map['name'] for rws_map in RWS_MAPS]:
+    if map_type not in RWS_PUBLIC_MAPS:
         raise ValueError
 
     url = 'https://waterinfo.rws.nl/api/point/latestmeasurements?'
@@ -91,8 +44,8 @@ def get_stations(map_type):
             'locationCode': station['properties']['locationCode'],
             'coordinates': station['geometry']['coordinates'],
             'crs': station['crs']['properties']['name'].lower(),
+            'expert_parameter': station['properties']['measurements'][0]['parameterId']
         })
-
     return stations
 
 
@@ -101,22 +54,12 @@ class Waterinfo(object):
     api = "http://waterinfo.rws.nl/api/Download/CSV?"
 
     def __init__(self, map_name):
-        map_info = get_map_info(map_name)
-        if not map_info:
+        if map_name not in RWS_PUBLIC_MAPS:
             raise ValueError(f'{map_name} does not exist')
 
-        self.map_name = map_info['name']
-        self.group = map_info['group']
-        self.stations = get_stations(map_info['name'])
-        self.parameters = get_download_parameters(self.group)
+        self.map_name = map_name
+        self.stations = get_stations(self.map_name)
 
-    @property
-    def parameter_slugs(self):
-        return [parameter['slug'] for parameter in self.parameters]
-
-    @property
-    def parameter_names(self):
-        return [parameter['label'] for parameter in self.parameters]
 
     def update_station_crs(self, crs='epsg:25831'):
         crs_to_change = {stn['crs'] for stn in self.stations} - {crs}
@@ -142,16 +85,12 @@ class Waterinfo(object):
                 break
         return station_info
 
-    def get_data_from_horizon(self, station, start_date, end_date, **kwargs):
+
+    def get_data_from_horizon(self, station, start_date, end_date):
         """
         Get rijkswaterstaat tidal data for a given station between to
         dates
         """
-
-        # get expert parameter to query
-        expert_parameter = kwargs.get('expert_parameter', self.parameter_slugs[0])
-        if not expert_parameter in self.parameter_slugs:
-            raise ValueError("Expert parameter doen't exist")
 
         # check if full station name provided or slug- if full name get slug
         station = self.get_station(station)
@@ -160,15 +99,15 @@ class Waterinfo(object):
 
         #parse input times
         start_offset = (utc.localize(start_date) -
-                            utc.localize(datetime.now())).total_seconds()
+                            utc.localize(datetime.now())).total_seconds()/3600
         end_offset = (utc.localize(end_date) -
-                            utc.localize(datetime.now())).total_seconds()
-
+                            utc.localize(datetime.now())).total_seconds()/3600
         parameters = {
-            'expertParameter': expert_parameter,
+            'expertParameter': station['expert_parameter'],
             'locationSlug': station['locationCode'],
-            'timehorizon': f"{start_offset/3600:.0f},{end_offset/3600:.0f}"
+            'timehorizon': f"{int(start_offset)},{int(end_offset)}"
         }
+
         response = requests.get(self.api, params=parameters)
         csv = response.text
         return csv
@@ -181,11 +120,6 @@ class Waterhoogte(Waterinfo):
 
     def get_data_between_dates(self, station, start_date, end_date, **kwargs):
 
-        # get expert parameter to query
-        expert_parameter = kwargs.get('expert_parameter', self.parameter_slugs[0])
-        if not expert_parameter in self.parameter_slugs:
-            raise ValueError("Expert parameter doen't exist")
-
         # check if full station name provided or slug- if full name get slug
         station = self.get_station(station)
         if not station:
@@ -197,7 +131,7 @@ class Waterhoogte(Waterinfo):
 
         date_format = '%Y-%m-%dT%H:%M:%S.001Z'
         parameters = {
-            'expertParameter': expert_parameter,
+            'expertParameter': station['expert_parameter'],
             'locationSlug': station['locationCode'],
             'startdate': utc.localize(start_date).strftime(date_format),
             'enddate': utc.localize(end_date).strftime(date_format),
@@ -234,6 +168,28 @@ class Waterhoogte(Waterinfo):
         return df_tidal
 
 
+class Projection(object):
+    """
+    class to transform between two coordinate systems
+    """
+
+    def __init__(self, first_projection, second_projection):
+        self.first_projection = pyproj.Proj(init=first_projection)
+        self.second_projection = pyproj.Proj(init=second_projection)
+
+    def forwards(self, lon, lat):
+        """
+        transform longitude and latitude from first to second coord system
+        """
+        return pyproj.transform(self.second_projection, self.first_projection, lon, lat)
+
+    def backwards(self, lon, lat):
+        """
+        transform longitude and latitude from second to first coord system
+        """
+        return pyproj.transform(self.second_projection, self.first_projection, lon, lat)
+
+
 if __name__ == "__main__":
 
     waterhoogte = Waterhoogte()
@@ -246,4 +202,4 @@ if __name__ == "__main__":
         station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3))
 
     waterhoogte.update_station_crs('epsg:4326')
-    print(waterhoogte.stations)
+    print(data_from_horizon)

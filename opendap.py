@@ -62,7 +62,7 @@ class Measurement(object):
 
     @property
     def file_list(self):
-        files = [os.path.join(self.data_url, file)
+        files = [File(os.path.join(self.data_url, file))
                      for file in get_files(self.catalog_url)]
         return files
 
@@ -70,15 +70,14 @@ class Measurement(object):
         file_out = None
         station_name = station_name.lower()
         for file in self.file_list:
-            station_code = re.findall('id\d+-(.*).nc$', file)[0]
+            station_code = re.findall('id\d+-(.*).nc$', file.filepath)[0]
             if all([letter in station_name for letter in station_code.lower()]):
-                with netCDF4.Dataset(file, 'r') as ds:
-                    if ds.stationname.lower() == station_name.lower():
-                        file_out = File(file)
+                if file.meta['station_name'].lower() == station_name.lower():
+                    file_out = file
         return file_out
 
-    def get_all_available_stations(self):
-        return [File(file).meta for file in self.files]
+    def get_all_stations(self):
+        return [file.meta for file in self.file_list]
 
 
 class File:
@@ -93,7 +92,11 @@ class File:
                 'station_name': ds.stationname,
                 'location_code': ds.locationcode,
                 'coordinates': [ds.geospatial_lat_min, ds.geospatial_lon_min],
-                'crs': 'epsg:4326'
+                'crs': 'epsg:4326',
+                'time_coverage_start': datetime.strptime(
+                    ds.time_coverage_start, '%Y-%m-%dP%H:%M:%S'),
+                'time_coverage_end': datetime.strptime(
+                    ds.time_coverage_end, '%Y-%m-%dP%H:%M:%S')
             }
         return station_meta
 
@@ -120,5 +123,5 @@ if __name__ == "__main__":
     measurement = 'Waterhoogte_in_cm_t.o.v._normaal_amsterdams_peil_in_oppervlaktewater'
     waterhoogte = Measurement(measurement)
     file = waterhoogte.get_file('scheveningen')
-    print(file.meta)
-    print(file.get_data(datetime(2014, 1, 1), datetime(2014, 1, 2)))
+    print(waterhoogte.get_all_stations())
+    #print(file.get_data(datetime(2014, 1, 1), datetime(2014, 1, 2)))
