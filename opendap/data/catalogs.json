@@ -1,0 +1,147 @@
+[
+    {
+        "pk": 30,
+        "full_name": "Zwevende_stof_in_mg_l_in_oppervlaktewater",
+        "id": "410"
+    },
+    {
+        "pk": 29,
+        "full_name": "Zuurstof_in_mg_l_in_oppervlaktewater",
+        "id": "360"
+    },
+    {
+        "pk": 28,
+        "full_name": "Zuurgraad_in_oppervlaktewater",
+        "id": "377"
+    },
+    {
+        "pk": 27,
+        "full_name": "Waterhoogte_in_cm_t.o.v._normaal_amsterdams_peil_in_oppervlaktewater",
+        "id": "1"
+    },
+    {
+        "pk": 26,
+        "full_name": "Waterhoogte_in_cm_t.o.v._mean_sea_level_in_oppervlaktewater",
+        "id": "54"
+    },
+    {
+        "pk": 25,
+        "full_name": "Totaal_organisch_koolstof_in_mg_l_in_oppervlaktewater",
+        "id": "401"
+    },
+    {
+        "pk": 24,
+        "full_name": "Totaal_fosfaat_in_mg_l_na_filtratie_in_oppervlaktewater",
+        "id": "364"
+    },
+    {
+        "pk": 23,
+        "full_name": "Totaal_fosfaat_in_mg_l_in_oppervlaktewater",
+        "id": "363"
+    },
+    {
+        "pk": 22,
+        "full_name": "Temperatuur_in_oC_in_oppervlaktewater",
+        "id": "44"
+    },
+    {
+        "pk": 21,
+        "full_name": "Stikstof_in_mg_l_na_filtratie_in_oppervlaktewater",
+        "id": "347"
+    },
+    {
+        "pk": 20,
+        "full_name": "Stikstof_in_mg_l_in_oppervlaktewater",
+        "id": "346"
+    },
+    {
+        "pk": 19,
+        "full_name": "Som_nitraat_en_nitriet_in_mg_l_uitgedrukt_in_stikstof___na_filtratie_in_oppervlaktewater",
+        "id": "1238"
+    },
+    {
+        "pk": 18,
+        "full_name": "Silicaat_in_mg_l_uitgedrukt_in_silicium___na_filtratie_in_oppervlaktewater",
+        "id": "560"
+    },
+    {
+        "pk": 17,
+        "full_name": "Significante_golfhoogte_uit_energiespectrum_van_30-500_mhz_in_cm_in_oppervlaktewater",
+        "id": "22"
+    },
+    {
+        "pk": 16,
+        "full_name": "Saliniteit_in_oppervlaktewater",
+        "id": "559"
+    },
+    {
+        "pk": 14,
+        "full_name": "Particulair_organisch_koolstof_in_mg_l_particulair_gebonden_in_oppervlaktewater",
+        "id": "1082"
+    },
+    {
+        "pk": 13,
+        "full_name": "Orthofosfaat_in_mg_l_uitgedrukt_in_fosfor___na_filtratie_in_oppervlaktewater",
+        "id": "380"
+    },
+    {
+        "pk": 12,
+        "full_name": "Opgelost_organisch_koolstof_in_mg_l_na_filtratie_in_oppervlaktewater",
+        "id": "1083"
+    },
+    {
+        "pk": 11,
+        "full_name": "Nitriet_in_mg_l_uitgedrukt_in_stikstof___na_filtratie_in_oppervlaktewater",
+        "id": "492"
+    },
+    {
+        "pk": 10,
+        "full_name": "Nitraat_in_mg_l_uitgedrukt_in_stikstof___na_filtratie_in_oppervlaktewater",
+        "id": "493"
+    },
+    {
+        "pk": 9,
+        "full_name": "Kjeldahl_stikstof_in_mg_l_uitgedrukt_in_stikstof_in_oppervlaktewater",
+        "id": "332"
+    },
+    {
+        "pk": 8,
+        "full_name": "Gemiddelde_richting_uit_golfrichtingsspectrum_van_30-500_mhz_in_graad_t.o.v._kaart_noorden_in_oppervlaktewater",
+        "id": "23"
+    },
+    {
+        "pk": 7,
+        "full_name": "Gem._golfperiode_uit_spectrale_momenten_m0+m2_van_30-500_mhz_in_s_in_oppervlaktewater",
+        "id": "24"
+    },
+    {
+        "pk": 6,
+        "full_name": "Extinctiecoefficient_in__m_in_oppervlaktewater",
+        "id": "713"
+    },
+    {
+        "pk": 5,
+        "full_name": "Doorzicht_in_dm_in_oppervlaktewater",
+        "id": "541"
+    },
+    {
+        "pk": 4,
+        "full_name": "Debiet_in_m3_s_in_oppervlaktewater",
+        "id": "29"
+    },
+    {
+        "pk": 3,
+        "full_name": "Chlorofyl-a_in_ug_l_in_oppervlaktewater",
+        "id": "282"
+    },
+    {
+        "pk": 2,
+        "full_name": "Chloride_in_mg_l_in_oppervlaktewater",
+        "id": "433"
+    },
+    {
+        "pk": 1,
+        "full_name": "Ammonium_in_mg_l_uitgedrukt_in_stikstof___na_filtratie_in_oppervlaktewater",
+        "id": "491"
+    }
+]
