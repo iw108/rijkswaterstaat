@@ -7,7 +7,7 @@ Created on Sat Jan 19 12:35:46 2019
 """
 
 from flask import Flask, render_template, jsonify
-from rijkswaterstaat import Waterinfo
+from waterinfo.public import Waterinfo
 
 app = Flask(__name__)
 app.config['GOOGLE_API_KEY'] = '<YOUR-GOOGLE-API-KEY>'

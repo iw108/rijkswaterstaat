@@ -14,6 +14,7 @@ TIMEZONE = "MET"
 # set up paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+LOG_DIR = os.path.join(BASE_DIR, 'logs')
 
 # database info
 DATABASE_PATH = os.path.join(DATA_DIR, 'opendap.db')
@@ -32,7 +33,7 @@ LOG_DEFAULT = {
     'handlers': {
         'file_handler': {
             'level': 'INFO',
-            'filename': os.path.join(BASE_DIR, 'opendap.log'),
+            'filename': os.path.join(LOG_DIR, 'opendap.log'),
             'class': 'logging.FileHandler',
             'formatter': 'standard'
         }

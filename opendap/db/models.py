@@ -1,17 +1,15 @@
-import os
 
-from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Float, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-from settings import CATALOG_URL, DATA_URL
-
+from ..settings import CATALOG_URL, DATA_URL
 
 Base = declarative_base()
 
 
 class Catalog(Base):
-    __tablename__ = 'catalogs'
+    __tablename__ = 'catalog'
 
     pk = Column(Integer, primary_key=True)
     id = Column(Integer)
@@ -27,7 +25,7 @@ class Catalog(Base):
 
 
 class File(Base):
-    __tablename__ = 'files'
+    __tablename__ = 'file'
 
     id = Column(Integer, primary_key=True)
     station_name = Column(String(50), nullable=False)
