@@ -1,17 +1,11 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jan 23 19:50:47 2019
-
-@author: isaacwilliams
-"""
-
 
 from datetime import datetime
+
 import pandas as pd
-import pyproj
 from pytz import utc
 import requests
+
+from .utils import Projection
 
 
 RWS_PUBLIC_MAPS = [
@@ -37,14 +31,16 @@ def get_stations(map_type):
     data = requests.get(url, params={'parameterid': map_type}).json()
 
     # extract station information
-    stations, crs_of_stations = [], []
+    stations = []
     for station in data['features']:
         stations.append({
             'name': station['properties']['name'],
             'locationCode': station['properties']['locationCode'],
             'coordinates': station['geometry']['coordinates'],
             'crs': station['crs']['properties']['name'].lower(),
-            'expert_parameter': station['properties']['measurements'][0]['parameterId']
+            'expert_parameter': (
+                station['properties']['measurements'][0]['parameterId']
+            )
         })
     return stations
 
@@ -60,7 +56,6 @@ class Waterinfo(object):
         self.map_name = map_name
         self.stations = get_stations(self.map_name)
 
-
     def update_station_crs(self, crs='epsg:25831'):
         crs_to_change = {stn['crs'] for stn in self.stations} - {crs}
         for old_crs in crs_to_change:
@@ -69,7 +64,9 @@ class Waterinfo(object):
                 if station['crs'] == old_crs:
                     station.update({
                         'crs': crs,
-                        'coordinates': list(proj.backwards(*station['coordinates']))
+                        'coordinates': (
+                            list(proj.backwards(*station['coordinates']))
+                        )
                     })
 
     def get_station(self, station_name):
@@ -85,7 +82,6 @@ class Waterinfo(object):
                 break
         return station_info
 
-
     def get_data_from_horizon(self, station, start_date, end_date):
         """
         Get rijkswaterstaat tidal data for a given station between to
@@ -97,11 +93,11 @@ class Waterinfo(object):
         if not station:
             raise ValueError('Station does not exist')
 
-        #parse input times
+        # parse input times
         start_offset = (utc.localize(start_date) -
-                            utc.localize(datetime.now())).total_seconds()/3600
+                        utc.localize(datetime.now())).total_seconds()/3600
         end_offset = (utc.localize(end_date) -
-                            utc.localize(datetime.now())).total_seconds()/3600
+                      utc.localize(datetime.now())).total_seconds()/3600
         parameters = {
             'expertParameter': station['expert_parameter'],
             'locationSlug': station['locationCode'],
@@ -146,8 +142,7 @@ class Waterhoogte(Waterinfo):
             return self.parse_csv(csv)
         return csv
 
-    @staticmethod
-    def parse_csv(csv):
+    def parse_csv(self, csv):
 
         # process the the response and store in dataframe
         lines = csv.splitlines()
@@ -163,43 +158,8 @@ class Waterhoogte(Waterinfo):
             # extract tidal level
             tidal_level.append(float(columns[-1]))
 
-        df_tidal = pd.DataFrame(tidal_level, index=timestamps, columns=['tidal_level'])
+        df_tidal = pd.DataFrame(
+            tidal_level, index=timestamps, columns=['tidal_level']
+        )
         df_tidal.index = df_tidal.index.map(lambda ts: utc.localize(ts))
         return df_tidal
-
-
-class Projection(object):
-    """
-    class to transform between two coordinate systems
-    """
-
-    def __init__(self, first_projection, second_projection):
-        self.first_projection = pyproj.Proj(init=first_projection)
-        self.second_projection = pyproj.Proj(init=second_projection)
-
-    def forwards(self, lon, lat):
-        """
-        transform longitude and latitude from first to second coord system
-        """
-        return pyproj.transform(self.second_projection, self.first_projection, lon, lat)
-
-    def backwards(self, lon, lat):
-        """
-        transform longitude and latitude from second to first coord system
-        """
-        return pyproj.transform(self.second_projection, self.first_projection, lon, lat)
-
-
-if __name__ == "__main__":
-
-    waterhoogte = Waterhoogte()
-    station = waterhoogte.stations[0]
-
-    data_between_dates = waterhoogte.get_data_between_dates(
-        station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3), parse=True)
-
-    data_from_horizon = waterhoogte.get_data_from_horizon(
-        station['name'], start_date=datetime(2019, 2, 1), end_date=datetime(2019, 2, 3))
-
-    waterhoogte.update_station_crs('epsg:4326')
-    print(data_from_horizon)

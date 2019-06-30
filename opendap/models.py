@@ -1,9 +1,9 @@
 
-from sqlalchemy import create_engine, Column, Float, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-from ..settings import CATALOG_URL, DATA_URL
+from .settings import CATALOG_URL, DATA_URL
 
 Base = declarative_base()
 
@@ -17,11 +17,14 @@ class Catalog(Base):
     files = relationship("File", back_populates="catalog")
 
     def __repr__(self):
-       return f"<catalog {self.full_name}>"
+        return f"<catalog {self.full_name}>"
 
     @property
     def url(self):
-        return f"{CATALOG_URL}/{int(self.pk):02d}_{self.full_name}/nc/catalog.html"
+        return (
+            f"{CATALOG_URL}/{int(self.pk):02d}_{self.full_name}"
+            "/nc/catalog.html"
+        )
 
 
 class File(Base):
