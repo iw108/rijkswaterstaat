@@ -77,18 +77,28 @@ def get_catalogs():
 
 def extract_data():
 
+    logging.config.dictConfig(LOG_DEFAULT)
+
     catalogs = get_catalogs()
+    logging.info(f"{len(catalogs)} catalogs found")
 
     all_catalogs, all_files = [], []
-    for catalog in catalogs:
-        catalog_files = catalog.get_files()
+    for cat_no, catalog in enumerate(catalogs):
+        try:
+            catalog_files = catalog.get_files()
+        except Exception as e:
+            logging.error("Failed to get files for catalog no. {cat_no + 1}")
+            raise e
 
+        logging.info(f"Catalog {cat_no + 1}: {len(catalog_files)} files")
         for file in catalog_files:
             file_url = os.path.join(catalog.get_data_url(), file)
-
-            meta = OpendapFile(file_url).meta
-            meta.update(catalog_id=catalog.id)
-            all_files.update(meta)
+            try:
+                meta = OpendapFile(file_url).meta
+                meta.update(catalog_id=catalog.id)
+                all_files.update(meta)
+            except Exception as e:
+                logging.warning(f"Skipping file {file_url}. Error {e}")
 
         all_catalogs.append(catalog.as_json)
 
