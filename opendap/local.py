@@ -11,7 +11,7 @@ import requests
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from .models import Base, Catalog, File
+from .models import Base, Catalog as CatalogModel, File as FileModel
 from .settings import (
     CATALOG_URL, DATA_DIR, DATA_URL, DATABASE_URL, DATABASE_PATH, LOG_DEFAULT
 )
@@ -35,75 +35,66 @@ def _get_files(url):
     return files
 
 
-def extract_data():
-    # step 1: get catalogs
-    logging.config.dictConfig(LOG_DEFAULT)
-    logging.info('Getting catalogs.')
-    try:
-        catalog_list = _get_files(os.path.join(CATALOG_URL, 'catalog.html'))
-    except Exception:
-        logging.error("Could not get catalog files")
-        raise
-    logging.info(f"Getting catalog files. ({len(catalog_list)} catalogs)")
+class Catalog(object):
 
-    # step 2: process catalogs and get catalog files
-    catalogs = []
-    for index, file in enumerate(catalog_list):
-        catalog = {
-          'pk': int(re.findall(r'(^\d+)', file)[0]),
-          'full_name': re.findall(r'^\d+_(.*)', file)[0]
+    def __init__(self, filename):
+        self.id = None
+        self.filename = filename
+
+    def get_pk(self):
+        return int(re.findall(r'(^\d+)', self.filename)[0])
+
+    def get_fullname(self):
+        return re.findall(r'^\d+_(.*)', self.filename)[0]
+
+    def get_data_url(self):
+        return f"{DATA_URL}/{self.filename}/nc/"
+
+    def get_catalog_url(self):
+        return f"{CATALOG_URL}/{self.filename}/nc/catalog.html"
+
+    @property
+    def as_json(self):
+        return {
+            'pk': self.get_pk(),
+            'full_name': self.get_fullname(),
+            'id': self.id
         }
 
-        full_url = (
-            f"{CATALOG_URL}/{catalog['pk']:02d}_{catalog['full_name']}/"
-            "nc/catalog.html"
-        )
+    def get_files(self):
+        files = _get_files(self.get_catalog_url())
+        self.id = int(re.findall(r'^id(\d+)-', files[0])[0])
+        return files
 
-        try:
-            catalog.update({'files': _get_files(full_url)})
-        except Exception:
-            logging.error("Failed to get files for catalog no. {index + 1}")
-            raise
+    def __repr__(self):
+        return f"{self.filename}"
 
-        if catalog['files']:
-            catalog.update({
-                'id': int(re.findall(r'^id(\d+)-', catalog['files'][0])[0])
-            })
-            catalogs.append(catalog)
 
-    number_of_files = sum([len(catalog['files']) for catalog in catalogs])
-    logging.info(f"{number_of_files} catalog files")
+def get_catalogs():
+    catalogs = _get_files(os.path.join(CATALOG_URL, 'catalog.html'))
+    return [Catalog(catalog) for catalog in catalogs]
 
-    # step 3: read the files and extract the meta info
-    all_files = []
-    for index, catalog in enumerate(catalogs):
-        files = catalog.pop('files')
-        logging.info(f"Processing {catalog['full_name']}.")
 
-        count = 0
-        for file in files:
-            file_url = (
-                f"{DATA_URL}/{catalog['pk']:02d}_{catalog['full_name']}"
-                "/nc/{file}"
-            )
-            try:
-                meta = OpendapFile(file_url).meta
-                meta.update(catalog_id=catalog['id'])
-                all_files.append(meta)
-                count += 1
-            except Exception as e:
-                logging.warning(f"Skipping file {file_url}. Error {e}")
+def extract_data():
 
-        logging.info(
-            (f"Finished with {catalog['full_name']}"
-             f" ({index + 1}/{len(catalogs)})."
-             f"Extracted information from {count}/{len(files)} files")
-        )
+    catalogs = get_catalogs()
 
-        catalogs[index] = catalog
+    all_catalogs, all_files = [], []
+    for catalog in catalogs:
+        catalog_files = catalog.get_files()
 
+        for file in catalog_files:
+            file_url = os.path.join(catalog.get_data_url(), file)
+
+            meta = OpendapFile(file_url).meta
+            meta.update(catalog_id=catalog.id)
+            all_files.update(meta)
+
+        all_catalogs.append(catalog.as_json)
+
+    # now save
     with open(os.path.join(DATA_DIR, 'catalogs.json'), 'w') as file:
-        json.dump(catalogs, file, indent=4)
+        json.dump(all_catalogs, file, indent=4)
 
     with open(os.path.join(DATA_DIR, 'files.json'), 'w') as file:
         json.dump(all_files, file, indent=4)
@@ -111,38 +102,40 @@ def extract_data():
 
 def create_db():
 
-    if not os.path.exists(DATABASE_PATH):
-        # add tables to database
-        engine = create_engine(DATABASE_URL, echo=False)
-        Base.metadata.create_all(engine)
+    if os.path.exists(DATABASE_PATH):
+        raise ValueError("Database already exists")
 
-        Session = sessionmaker(bind=engine)
-        session = Session()
+    catalog_path = os.path.join(DATA_DIR, 'catalogs.json')
+    file_path = os.path.join(DATA_DIR, 'files.json')
+    if not (os.path.exists(catalog_path) and os.path.exists(catalog_path)):
+        raise ValueError('Please ensure files exists')
 
-        # get catalogs
-        catalog_path = os.path.join(DATA_DIR, 'catalogs.json')
-        if os.path.exists(catalog_path):
-            with open(catalog_path, 'r') as file:
-                catalogs = json.load(file)
-                for index, catalog in enumerate(catalogs):
-                    catalogs[index] = Catalog(**catalog)
+    # add tables to database
+    engine = create_engine(DATABASE_URL, echo=False)
+    Base.metadata.create_all(engine)
 
-        # get files
-        file_path = os.path.join(DATA_DIR, 'files.json')
-        if os.path.exists(file_path):
-            with open(file_path, 'r') as file:
-                files = json.load(file)
-                for index, file in enumerate(files):
-                    for key in ('time_coverage_start', 'time_coverage_end'):
-                        file[key] = datetime.strptime(
-                            file[key], '%Y-%m-%dP%H:%M:%S')
-                    files[index] = File(**file)
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-        try:
-            logging.config.dictConfig(LOG_DEFAULT)
-            session.add_all(catalogs + files)
-            session.commit()
-        except Exception:
-            session.rollback()
-        finally:
-            session.close()
+    with open(catalog_path, 'r') as file:
+        catalogs = json.load(file)
+        for index, catalog in enumerate(catalogs):
+            catalogs[index] = CatalogModel(**catalog)
+
+    with open(file_path, 'r') as file:
+        files = json.load(file)
+        for index, file in enumerate(files):
+            for key in ('time_coverage_start', 'time_coverage_end'):
+                file[key] = datetime.strptime(
+                    file[key], '%Y-%m-%dP%H:%M:%S'
+                )
+            files[index] = FileModel(**file)
+
+    try:
+        logging.config.dictConfig(LOG_DEFAULT)
+        session.add_all(catalogs + files)
+        session.commit()
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()
